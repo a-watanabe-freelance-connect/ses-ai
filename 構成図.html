@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SES-AI 構成図（v0スライス）</title>
+<style>
+  :root{
+    --script:#2563eb; --claude:#7c3aed; --cloud:#059669; --gmail:#ea4335;
+    --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --future:#94a3b8; --warn:#b45309;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink); line-height:1.6; -webkit-font-smoothing:antialiased;
+    font-family:-apple-system,"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",Meiryo,sans-serif;}
+  .wrap{max-width:1080px; margin:0 auto; padding:32px 20px 64px}
+  code,.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:.92em}
+
+  header{margin-bottom:20px}
+  .kicker{color:var(--muted); font-weight:700; letter-spacing:.08em; font-size:13px}
+  h1{margin:.15em 0 .5em; font-size:34px; letter-spacing:.02em}
+  .badge-mvp{display:inline-block; background:var(--claude); color:#fff; font-size:13px; font-weight:800; padding:2px 10px; border-radius:8px; vertical-align:middle; margin-left:8px}
+  .goals{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  .goal{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; font-size:14.5px}
+  .goal .gnum{display:inline-block; background:var(--ink); color:#fff; font-size:12px; font-weight:700; padding:2px 9px; border-radius:999px; margin-right:8px}
+  @media(max-width:720px){.goals{grid-template-columns:1fr}}
+
+  /* scope band */
+  .scope{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:20px 0}
+  @media(max-width:720px){.scope{grid-template-columns:1fr}}
+  .scope-col{border:1px solid var(--line); border-radius:12px; padding:14px 16px; background:#fff}
+  .scope-col.in{border-left:6px solid var(--cloud); background:#f0fdf9}
+  .scope-col.fut{border-left:6px solid var(--future); background:#f8fafc}
+  .scope-col h3{margin:0 0 8px; font-size:14px}
+  .scope-col.in h3{color:#047857} .scope-col.fut h3{color:#475569}
+  .scope-col ul{margin:0; padding-left:18px} .scope-col li{font-size:13.5px; margin:3px 0}
+  .scope-col.fut li{color:#64748b}
+
+  .scaleband{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:18px 0}
+  .stat{background:linear-gradient(180deg,#fff,#fbfdff); border:1px solid var(--line); border-radius:12px; padding:14px; text-align:center}
+  .stat .num{font-size:22px; font-weight:800; color:var(--script)}
+  .stat .lbl{font-size:12px; color:var(--muted); margin-top:2px}
+  @media(max-width:720px){.scaleband{grid-template-columns:1fr 1fr}}
+
+  .legend{display:flex; flex-wrap:wrap; gap:10px; margin:6px 0 24px}
+  .lg{display:inline-flex; align-items:center; gap:7px; background:#fff; border:1px solid var(--line); border-radius:999px; padding:5px 12px; font-size:12.5px; font-weight:600}
+  .dot{width:11px; height:11px; border-radius:50%}
+  .d-script{background:var(--script)} .d-claude{background:var(--claude)} .d-cloud{background:var(--cloud)} .d-gmail{background:var(--gmail)} .d-future{background:var(--future)}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:22px 22px 24px; margin:18px 0; box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .card > h2{margin:0 0 4px; font-size:20px; display:flex; align-items:center; gap:10px}
+  .card > h2::before{content:""; width:5px; height:20px; border-radius:3px; background:var(--script)}
+  .card.violet > h2::before{background:var(--claude)}
+  .card.green > h2::before{background:var(--cloud)}
+  .card.warn > h2::before{background:var(--warn)}
+  .cap{color:var(--muted); font-size:13.5px; margin:.2em 0 18px}
+
+  .pipe{display:flex; flex-direction:column; gap:0}
+  .stage{border:1px solid var(--line); border-left:6px solid var(--c,#94a3b8); border-radius:12px; padding:12px 16px; background:#fff}
+  .stage[data-a=gmail]{--c:var(--gmail)} .stage[data-a=script]{--c:var(--script)}
+  .stage[data-a=claude]{--c:var(--claude)} .stage[data-a=cloud]{--c:var(--cloud)}
+  .stage-head{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+  .pill{font-size:11px; font-weight:800; color:#fff; padding:2px 9px; border-radius:999px}
+  .p-gmail{background:var(--gmail)} .p-script{background:var(--script)} .p-claude{background:var(--claude)} .p-cloud{background:var(--cloud)}
+  .stage-title{font-weight:700; font-size:15px}
+  .stage-meta{color:var(--muted); font-size:12.5px; margin-top:3px}
+  .arrow{display:flex; align-items:flex-start; gap:10px; padding:7px 0 7px 8px; color:var(--muted); font-size:13px}
+  .arrow .tri{color:var(--a,#94a3b8); font-size:15px; line-height:1.3}
+  .arrow.a-script{--a:var(--script)} .arrow.a-claude{--a:var(--claude)} .arrow.a-cloud{--a:var(--cloud)}
+  .arrow b{color:var(--ink)}
+  .tag{font-size:11px; font-weight:700; padding:1px 7px; border-radius:6px; border:1px solid var(--line); color:var(--muted)}
+  .skip{margin:6px 0 6px 26px; font-size:12.5px; color:var(--future); border-left:2px dashed #cbd5e1; padding-left:10px}
+
+  .split-cols{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media(max-width:720px){.split-cols{grid-template-columns:1fr}}
+  .col{border:1px solid var(--line); border-radius:12px; padding:14px 16px}
+  .col h3{margin:0 0 10px; font-size:14px; display:flex; align-items:center; gap:8px}
+  .col ul{margin:0; padding-left:18px} .col li{font-size:13.5px; margin:4px 0}
+  .col.script{background:#f5f8ff} .col.claude{background:#faf5ff}
+  .col li.bk{color:var(--future)}
+
+  .share{display:grid; grid-template-columns:1fr auto 1.3fr; align-items:center; gap:14px}
+  @media(max-width:720px){.share{grid-template-columns:1fr}}
+  .pcs{display:flex; flex-direction:column; gap:8px}
+  .pc{border:1px dashed #cbd5e1; border-radius:10px; padding:9px 12px; font-size:13px; background:#fff; display:flex; align-items:center; gap:8px}
+  .conv{text-align:center; color:var(--muted); font-weight:800; font-size:22px}
+  @media(max-width:720px){.conv{transform:rotate(90deg)}}
+  .cloudbox{border:2px solid var(--cloud); border-radius:14px; padding:14px; background:#f0fdf9}
+  .cloudbox .ttl{font-weight:800; color:#047857; font-size:13px; margin-bottom:8px}
+  .cloudbox .item{background:#fff; border:1px solid #d1fae5; border-radius:9px; padding:8px 11px; font-size:12.5px; margin:6px 0}
+  .cloudbox .item b{color:#065f46}
+
+  .tabs{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
+  @media(max-width:720px){.tabs{grid-template-columns:1fr}}
+  .tab{border:1px solid var(--line); border-top:4px solid var(--cloud); border-radius:10px; padding:12px 14px; background:#fff}
+  .tab.fut{border-top-color:var(--future); background:#f8fafc}
+  .tab .nm{font-weight:800; font-family:ui-monospace,Menlo,monospace; font-size:14px; color:#065f46}
+  .tab.fut .nm{color:#64748b}
+  .tab .ds{font-size:12.5px; color:var(--muted); margin-top:4px}
+
+  .mflow{display:flex; flex-wrap:wrap; align-items:stretch; gap:10px}
+  .mbox{flex:1 1 170px; border:1px solid var(--line); border-radius:11px; padding:12px 14px; background:#fff; min-width:160px}
+  .mbox .h{font-weight:700; font-size:13.5px; margin-bottom:3px}
+  .mbox .s{font-size:12px; color:var(--muted)}
+  .mbox[data-a=claude]{border-left:5px solid var(--claude)}
+  .mbox[data-a=script]{border-left:5px solid var(--script)}
+  .mbox[data-a=in]{border-left:5px solid #94a3b8}
+  .mbox[data-a=out]{border-left:5px solid var(--cloud)}
+  .mconn{align-self:center; color:#cbd5e1; font-weight:800; font-size:20px}
+  .quote{margin-top:14px; background:#faf5ff; border:1px solid #efe0ff; border-radius:10px; padding:11px 14px; font-size:13px}
+  .quote b{color:var(--claude)}
+
+  .chips{display:flex; flex-wrap:wrap; gap:8px}
+  .chip{font-size:12.5px; font-weight:600; padding:5px 11px; border-radius:8px; border:1px solid var(--line); background:#fff}
+  .chip.star{border-color:#fbbf24; background:#fffbeb; color:#92400e}
+  .chip.star::before{content:"★ "; color:#f59e0b}
+
+  .inv{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  @media(max-width:720px){.inv{grid-template-columns:1fr}}
+  .inv li{border:1px solid #fde68a; background:#fffdf5; border-radius:10px; padding:10px 12px; font-size:12.5px}
+  .inv .k{font-weight:800; color:var(--warn); display:block; margin-bottom:2px}
+
+  footer{color:var(--muted); font-size:12px; margin-top:26px; text-align:center; line-height:1.8}
+  .note{color:var(--muted); font-size:12px; margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">SES営業の半自動化 · Claude Code</div>
+    <h1>SES-AI 構成図<span class="badge-mvp">v0スライス</span></h1>
+    <div class="goals">
+      <div class="goal"><span class="gnum">実現1</span>案件メールを<b>案件台帳に差分蓄積</b>（人材はスキップ）</div>
+      <div class="goal"><span class="gnum">実現2</span><b>要員 → 案件</b>マッチング（本人タブに蓄積）</div>
+    </div>
+  </header>
+
+  <!-- v0スコープ -->
+  <section class="scope">
+    <div class="scope-col in">
+      <h3>✅ 今つくる（v0スライス・複数人運用）</h3>
+      <ul>
+        <li>案件メール取込 → <code>案件台帳</code>（<b>未処理ラベルで差分・messageIdで重複回避</b>）</li>
+        <li>要員→案件マッチング → 本人タブに 1行1案件で蓄積</li>
+        <li>案件/人材/その他の仕分けは <b>Claude の推論</b>（案件だけ構造化）</li>
+      </ul>
+    </div>
+    <div class="scope-col fut">
+      <h3>🕒 将来（今は作らない）</h3>
+      <ul>
+        <li>人材メールの取込（<code>人材台帳</code>）</li>
+        <li>案件→人材（方向B）＋ <code>マッチ結果</code> タブ</li>
+        <li>添付スキルシート抽出（人材★用）／機械フィルタ <code>classify</code></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="scaleband">
+    <div class="stat"><div class="num">~1,000</div><div class="lbl">通／日 受信</div></div>
+    <div class="stat"><div class="num">SES専用</div><div class="lbl">案件/人材の受信箱</div></div>
+    <div class="stat"><div class="num">案件のみ</div><div class="lbl">v0で構造化</div></div>
+    <div class="stat"><div class="num">複数人</div><div class="lbl">別PCから実行</div></div>
+  </section>
+
+  <section class="legend">
+    <span class="lg"><span class="dot d-gmail"></span>Gmail</span>
+    <span class="lg"><span class="dot d-script"></span>スクリプト（決定的I/O）</span>
+    <span class="lg"><span class="dot d-claude"></span>Claude（解析・判断）</span>
+    <span class="lg"><span class="dot d-cloud"></span>クラウド共有（スプレッドシート＝正本）</span>
+    <span class="lg"><span class="dot d-future"></span>将来スコープ</span>
+  </section>
+
+  <!-- 取込パイプライン -->
+  <section class="card">
+    <h2>案件取込パイプライン（実現1・v0）</h2>
+    <p class="cap">Claude が推論で案件/人材を仕分け、<b>案件だけ</b>構造化する。運ぶ・書くのはコード、読む・判断するのは Claude。</p>
+    <div class="pipe">
+      <div class="stage" data-a="gmail">
+        <div class="stage-head"><span class="pill p-gmail">Gmail</span><span class="stage-title">SES専用受信箱（案件/人材が届く共有ボックス）</span></div>
+        <div class="stage-meta">約1,000通/日 ／ 届くのは案件・人材メールのみ</div>
+      </div>
+      <div class="arrow a-script"><span class="tri">▼</span><span><b>fetch_gmail</b>：未処理だけ取得（<code>-label:SES-AI/processed</code>）＋可逆軽量化（HTML表はTSV・原本保持）。<b>カーソルは Gmail ラベルだけ＝取りこぼし無し</b> <span class="tag">SCRIPT</span></span></div>
+
+      <div class="stage" data-a="script">
+        <div class="stage-head"><span class="pill p-script">data/inbox</span><span class="stage-title">軽量化した生メール</span></div>
+        <div class="stage-meta">→ そのまま構造化（Claude）へ</div>
+      </div>
+      <div class="arrow a-claude"><span class="tri">▼</span><span><b>Claude</b>：inbox を読み <b>案件/人材/その他 を推論で仕分け</b> → <b>案件だけ</b>スキーマ化（複数案件は分解・空欄非補完） <span class="tag">CLAUDE</span></span></div>
+      <div class="skip">人材メール・その他 → <b>スキップ</b>（案件だけ構造化）。ステータス更新反映（四分類）は【backlog：後で】。</div>
+
+      <div class="stage" data-a="claude">
+        <div class="stage-head"><span class="pill p-claude">data/parsed</span><span class="stage-title">案件・スキーマ準拠</span></div>
+        <div class="stage-meta">そのまま案件台帳へ（検証層 / <code>_quarantine</code> は【backlog：後で】）</div>
+      </div>
+      <div class="arrow a-script"><span class="tri">▼</span><span><b>append_sheet</b>：<b>messageId で重複回避</b> → 案件台帳に追記 → 各メールに <code>SES-AI/processed</code> ラベル <span class="tag">SCRIPT</span></span></div>
+
+      <div class="stage" data-a="cloud">
+        <div class="stage-head"><span class="pill p-cloud">案件台帳</span><span class="stage-title">スプレッドシート（共有・正本）</span></div>
+        <div class="stage-meta">シートの <code>messageId</code> 列で二重書き防止（row_key＝messageId）</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 役割分担 -->
+  <section class="card">
+    <h2>役割分担</h2>
+    <div class="split-cols">
+      <div class="col script">
+        <h3><span class="dot d-script"></span>コード（スクリプト）＝運ぶ・書く</h3>
+        <ul>
+          <li>Gmail 未処理取得（<code>-label:SES-AI/processed</code>・可逆軽量化）</li>
+          <li>messageId で重複回避して案件台帳へ追記 → 各メールに <code>processed</code> ラベル</li>
+          <li>案件台帳を全件読み出し／本人タブへ追記</li>
+          <li class="bk">【backlog：後で】カーソル/実行履歴/予算・upsert・粗フィルタ緩和</li>
+        </ul>
+      </div>
+      <div class="col claude">
+        <h3><span class="dot d-claude"></span>Claude ＝読む・判断する</h3>
+        <ul>
+          <li>案件/人材/その他の<b>推論仕分け</b>（案件だけ構造化）</li>
+          <li>案件のスキーマ抽出（空欄非補完・原文トレース）</li>
+          <li>要員→案件マッチング（許容条件の適用）</li>
+          <li>適合理由・懸念・惜しい候補の提示</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 進捗の共有 -->
+  <section class="card green">
+    <h2>進捗の共有 ― 複数人運用の要</h2>
+    <p class="cap">カーソルをローカルに置かない。<b>Gmail ラベルが共有カーソル</b>＝別PCの誰が実行しても同じ起点を見る（ラベルは共有メールボックス側にあり共有される）。</p>
+    <div class="share">
+      <div class="pcs">
+        <div class="pc">💻 実行者A（自分のPC）</div>
+        <div class="pc">💻 実行者B（別PC）</div>
+        <div class="pc">💻 実行者C（別PC）</div>
+      </div>
+      <div class="conv">⟶</div>
+      <div class="cloudbox">
+        <div class="ttl">☁ クラウド側＝共有の正本</div>
+        <div class="item"><b>Gmail ラベル</b> <code>SES-AI/processed</code> ＝共有カーソル（複数人でも共有）</div>
+        <div class="item"><b>スプレッドシート</b> 案件台帳の <code>messageId</code> 列 ＝二重書き防止</div>
+      </div>
+    </div>
+    <p class="skip" style="margin-left:0">【backlog：後で】<code>_state</code>カーソル／<code>_runlog</code>実行履歴／lock・TTL／overlap の多層冪等は、v0が動いてから足す（同時実行は稀＝messageId 重複回避で足りる）。</p>
+  </section>
+
+  <!-- タブ構成 -->
+  <section class="card green">
+    <h2>台帳スプレッドシート（タブ構成・v0）</h2>
+    <div class="tabs">
+      <div class="tab"><div class="nm">案件台帳</div><div class="ds">案件（需要）本体。1行1案件。row_key＝messageId。マッチはここを読む。</div></div>
+      <div class="tab"><div class="nm">人員一覧</div><div class="ds">自社要員の名簿（索引）。各人タブへのリンク＋件数。</div></div>
+      <div class="tab"><div class="nm">&lt;人員ごとのタブ&gt;</div><div class="ds">1人1タブ（要員名）。マッチ案件を1行1案件で蓄積。本人条件は <code>要員/*.md</code>。</div></div>
+      <div class="tab fut"><div class="nm">【後で】_state / _runlog</div><div class="ds">カーソル・ロック・予算／実行履歴。v0はGmailラベルとmessageIdで代替。</div></div>
+      <div class="tab fut"><div class="nm">【後で】補助</div><div class="ds">スキル正準辞書 / _staging / _quarantine / _archive。</div></div>
+      <div class="tab fut"><div class="nm">【将来】</div><div class="ds">人材台帳 / マッチ結果（方向B）/ _allowlist・_dropped_sample。</div></div>
+    </div>
+  </section>
+
+  <!-- 実現2 -->
+  <section class="card violet">
+    <h2>マッチング（実現2・v0）― 要員 → 案件</h2>
+    <p class="cap">v0は方向Aのみ。<b>案件台帳を全件読み</b>、要員（<code>要員/*.md</code> or プロンプト）にマッチ。許容条件（隣県可・経験±等）は <b>Claude が判断</b>する。</p>
+    <div class="mflow">
+      <div class="mbox" data-a="in"><div class="h">人員タブの本人条件</div><div class="s">スキル・経験・希望県・単価・リモート・稼働開始 ＋許容条件</div></div>
+      <div class="mconn">→</div>
+      <div class="mbox" data-a="script"><div class="h">read_sheet（案件台帳を全件読む）</div><div class="s">全件を Claude に渡す（粗フィルタ緩和・隣接県表は【後で】）</div></div>
+      <div class="mconn">→</div>
+      <div class="mbox" data-a="claude"><div class="h">Claude 評価</div><div class="s">許容条件（隣県可・経験±等）を判断。国籍/年齢/性別は足切りにしない</div></div>
+      <div class="mconn">→</div>
+      <div class="mbox" data-a="out"><div class="h">本人タブに追記＋表示</div><div class="s">1行1案件（本人タブ既存の messageId で重複回避）</div></div>
+    </div>
+    <div class="quote">許容条件プロンプトの例：<b>「経験3年だが優秀なので必要4年まで可」「東京＋隣県も可」「単価60万以上なら可」「フルリモート必須」</b></div>
+  </section>
+
+  <!-- スキーマの核 -->
+  <section class="card">
+    <h2>案件スキーマ ― マッチの核（★）</h2>
+    <p class="cap">★は抽出精度を最優先する列。ほかに 案件名・尚可スキル・精算幅・面談回数・案件メールリンク・生文抜粋 等。単価は上限予算、抽出不能は空欄（推測で埋めない）。単価min/max分離・スキル正準辞書は【backlog：後で】。</p>
+    <div class="chips">
+      <span class="chip star">必須スキル</span>
+      <span class="chip star">必要経験年数</span>
+      <span class="chip star">単価（上限予算）</span>
+      <span class="chip star">勤務地_県</span>
+      <span class="chip star">リモート</span>
+      <span class="chip star">開始時期</span>
+      <span class="chip star">商流</span>
+      <span class="chip">received_at</span>
+      <span class="chip">row_key（messageId）</span>
+      <span class="chip">ステータス（充足/クローズ）</span>
+    </div>
+  </section>
+
+  <!-- backlog：あとで足す堅牢化 -->
+  <section class="card warn">
+    <h2>【backlog】あとで足す堅牢化（v0が動いてから）</h2>
+    <p class="cap">v0 は Gmail ラベル＋messageId で回す。下記は<b>消さずに残す“後で”リスト</b>（今は作らない）。</p>
+    <ul class="inv">
+      <li><span class="k">カーソルの堅牢化</span><code>_state</code> に <code>max(internalDate)</code>＋overlap で取りこぼし監査（当日総数 vs 取得数）。v0はラベルで代替。</li>
+      <li><span class="k">row_key 内容ハッシュ・upsert</span><code>messageId#ハッシュ</code> で決定的採番＋upsert＋コミット順序固定。v0は messageId 重複回避で足りる。</li>
+      <li><span class="k">鮮度TTL・_archive</span>「充足/クローズ/他決」通知を既存行に反映（四分類）・received_at基準TTL・期限切れ退避。</li>
+      <li><span class="k">キルスイッチ／予算</span><code>daily_budget</code>・候補上限N・超過abort。無人化の解禁条件。</li>
+      <li><span class="k">ゴールドセット／回帰</span>案件50〜100通の正解を固定。モデル/プロンプト変更の受入条件。可観測性・Slack通知。</li>
+      <li><span class="k">状態の非原子性</span><code>_runlog</code>2フェーズ・lock TTL・<code>_staging</code>退避・検証層/<code>_quarantine</code>。</li>
+      <li><span class="k">粗フィルタ緩和</span>隣接県表・経験±・単価幅・NFKC・スキル正準辞書・単価min/max。</li>
+      <li><span class="k">write_match 強化</span>person_id 主キー・行ロック・タブ自動作成／OAuth Internal・委任・ドライラン・ストア抽象。</li>
+    </ul>
+  </section>
+
+  <footer>
+    SES-AI 構成図（v0スライス版）／ 正典: <code>CLAUDE.md</code>・<code>DECISIONS.md</code>・<code>TODO.md</code>
+  </footer>
+
+</div>
+</body>
+</html>

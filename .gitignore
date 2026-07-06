@@ -1,0 +1,29 @@
+# 認証情報・鍵（絶対にコミットしない）
+# secrets/ … Google OAuth の JSON（credentials.json / token.json）
+secrets/
+credentials.json
+token.json
+*.token.json
+# .env … 設定値・素の鍵（SHEET_ID・ANTHROPIC_API_KEY 等）
+.env
+.env.*
+# テンプレはコミットする
+!.env.example
+
+# 中間データ（メール本文・生データ）
+data/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# 実在人物のPII・実際の案件データを含む（要件確定までgit管理に入れない）
+要員/*.md
+!要員/_テンプレート.md
+reports/
+_scratch_*.txt
+scratch_*.txt
