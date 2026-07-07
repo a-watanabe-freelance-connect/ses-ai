@@ -4,6 +4,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 
@@ -23,7 +24,15 @@ def _resolve(env_key: str, default: str) -> Path:
 
 
 def get_credentials() -> Credentials:
-    """secrets/token.json を読み込み、無ければ初回同意フローを実行して発行する。"""
+    """GOOGLE_SERVICE_ACCOUNT_KEY があればサービスアカウント鍵で認証する（Routine実行想定）。
+    無ければ従来通り secrets/token.json のユーザーOAuthフローにフォールバックする（ローカル実行）。"""
+    service_account_key = os.environ.get("GOOGLE_SERVICE_ACCOUNT_KEY")
+    if service_account_key:
+        key_path = Path(service_account_key)
+        if not key_path.is_absolute():
+            key_path = REPO_ROOT / key_path
+        return service_account.Credentials.from_service_account_file(str(key_path), scopes=SCOPES)
+
     creds_path = _resolve("GOOGLE_CREDENTIALS", "./secrets/credentials.json")
     token_path = _resolve("GOOGLE_TOKEN", "./secrets/token.json")
 
