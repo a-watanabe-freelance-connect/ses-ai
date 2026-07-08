@@ -201,7 +201,13 @@ def main() -> None:
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="取得件数の上限（テスト用。未指定なら全件）")
-    parser.add_argument("--date", type=str, default=None, help="特定日のみ取得（YYYY-MM-DD・実測用）")
+    parser.add_argument("--date", type=str, default=None, help="特定日のみ取得（YYYY-MM-DD・単日ウィンドウ・実測用）")
+    parser.add_argument(
+        "--since", type=str, default=None,
+        help="この日以降(YYYY-MM-DD)の未処理メールだけを対象にする（上限日なしのフロア）。"
+             "本番のcold-start対策: 稼働開始日を渡すことで、過去の全履歴(数十万件)を対象から外す。"
+             "--date とは併用不可。",
+    )
     # TODO(暫定・削除予定): 2026-07-06のパイプライン検証で、未処理キューの直近が特定送信元
     # （SasaTech等の人材ブラスト）で占められ案件に到達できなかったため一時追加。
     # 将来 人材台帳 取込（CLAUDE.md §将来スコープ）を実装する際は人材メールも対象にするため、
@@ -211,12 +217,17 @@ def main() -> None:
         help="[暫定・削除予定] 送信元ドメインをカンマ区切りで除外（例: sasatech.co.jp）",
     )
     args = parser.parse_args()
+    if args.date and args.since:
+        parser.error("--date（単日）と --since（開始日フロア）は同時に指定できません")
 
     extra_query = ""
     if args.date:
         day = datetime.strptime(args.date, "%Y-%m-%d")
         next_day = day + timedelta(days=1)
         extra_query = f"after:{day.strftime('%Y/%m/%d')} before:{next_day.strftime('%Y/%m/%d')}"
+    elif args.since:
+        since_day = datetime.strptime(args.since, "%Y-%m-%d")
+        extra_query = f"after:{since_day.strftime('%Y/%m/%d')}"
     if args.exclude_from:
         excludes = " ".join(f"-from:{d.strip()}" for d in args.exclude_from.split(",") if d.strip())
         extra_query = f"{extra_query} {excludes}".strip()
