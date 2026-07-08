@@ -32,14 +32,24 @@
 
 ## 4. 入力（データ契約）
 
-- **案件**: `scripts/read_sheet.py --person <名前>`（Windows: `.venv\Scripts\python.exe scripts\read_sheet.py --person <名前>` / macOS・Linux: `.venv/bin/python scripts/read_sheet.py --person <名前>`） → `案件台帳` から `_state.match_cursor.<名前>`（`ingested_at` 到達点）**以降の差分**を、ヘッダー行をキーにした dict のリスト（JSON）で得る（列構成の変更に自動追従）。カーソル未設定（初回）は全件。
-  - **stderr の `[cursor] high_water=<ISO>` を控える**（手順2d の `--advance-cursor` に渡す）。読取自体はカーソルを進めない。
-  - プロフィール/許容条件を変えて出し直すときは `--person` の代わりに `--full`（全件・カーソル無視。手順2d で `--advance-cursor` を渡さない）。
-  - 注意: stdout側 JSON のシェル `>` リダイレクトは cp932 文字化けの恐れ。ツールの出力キャプチャで直接読むか、ファイル保存が必要なら UTF-8 でのファイル書き込みで行う（`[cursor]` 行はstderr）。
-  - 件数が多い場合（初回の全件等）の分担は件数次第で判断してよいが、マッチング判断は業務理解が要るため基本はメインの会話で評価する（精度優先）。
-- **要員**: 箇条書き（スキル/経験年数/希望勤務地/希望単価/リモート希望/稼働開始 等）＋許容条件プロンプト。取得は常に`scripts/read_profile.py`（Windows: `.venv\Scripts\python.exe scripts\read_profile.py` / macOS・Linux: `.venv/bin/python scripts/read_profile.py`）経由でDriveから行う:
-  1. **対象指定モード**: `read_profile.py <名前>` → 該当する人員フォルダの`<名前>.md`本文を標準出力する（人員フォルダ・プロフィールいずれかが無ければ`FileNotFoundError`）。
-  2. **一括モード**: 引数なしで`read_profile.py`を実行 → `稼働中`直下の全人員フォルダを走査し、`[{"person_name": "...", "content": "..."}, ...]`のJSON配列を標準出力する。**人員フォルダ内に`<人員名>.md`が無いフォルダは、エラーにせず黙ってスキップされる**（スクリプト側の仕様。§9参照）。
+モードで取得手段が分かれる（Windows は `.venv\Scripts\python.exe`、macOS・Linux は `.venv/bin/python` を頭に付ける）。
+
+**一括モード（既定・Routine無人実行）** — 稼働中フォルダ全員ぶんを1コマンドで束ねる: `scripts/match_prepare.py` → stdout に
+
+```json
+{"high_water": "<台帳最新ingested_at・全員共通>",
+ "targets": [{"person_name": "...", "cursor": "<現在のカーソル・空=初回全件>",
+              "delta_count": N, "profile": "<md本文>", "delta": [ {案件dict}, ... ]}, ...]}
+```
+
+- 各 `delta` はその要員の `match_cursor.<名前>` 基準の差分（**要員ごとに範囲が違う**。カーソル空＝新規要員は初回全件）。`profile` は本人条件（Drive `<名前>.md`）。`high_water` は**全員共通**で手順2cのカーソル前進に使う。
+- 案件台帳は**1回だけ**読む（要員ごとのSheets読みを避ける）。`<名前>.md` の無い人員フォルダは `[skip]` を stderr に出してスキップ（§9）。
+- `--full` で全 target を全件（スキル編集後の再マッチ。通常は §6 の `match-cursor reset` を使う）。
+- 許容条件プロンプトの個別適用はできない（一括のため）。stdout(JSON) は `>` リダイレクトでなく UTF-8 ファイル書き込み＋読取で（cp932文字化け防止）。`[skip]`/`[match_prepare]` は stderr。
+
+**対象指定モード（1名を名指し／許容条件を個別適用）**:
+- **案件**: `scripts/read_sheet.py --person <名前>` → `案件台帳` から `match_cursor.<名前>` 以降の差分（dictのJSONリスト・列変更に自動追従）。カーソル未設定は全件。**stderr の `[cursor] high_water=<ISO>` を控える**（手順2dで使う）。読取自体はカーソルを進めない。`--full` で全件。cp932対策は上と同様。
+- **要員**: `scripts/read_profile.py <名前>` → 該当人員フォルダの `<名前>.md` 本文（人員フォルダ・md いずれか無ければ `FileNotFoundError`）。許容条件プロンプト（隣県可・経験±等）は本人条件へ上書き・追加適用。
 
 ## 5. 評価（判断基準）
 
@@ -64,23 +74,27 @@
 
 ## 6. 処理手順
 
-**差分がデフォルト**。対象指定・一括いずれも、対象者ごとに「差分取得→評価→反映＋カーソル前進」を回す（一括でも人員を名指しせず稼働中フォルダ全員が差分で処理される。新規要員は初回だけ全件）。
+各対象者について「**その人の差分案件 × その人の本人条件**」を評価し、**その人のタブ**へ追記して**その人のカーソル**を進める（人ごとに独立・差分がデフォルト）。
 
-1. 対象者を確定する（§4の要員取得）:
-   - 対象指定モード: `read_profile.py <名前>` で1名分。
-   - 一括モード: `read_profile.py`（引数なし）で`稼働中`フォルダ全員分。
-2. 対象者それぞれ `<名前>` について a〜d を**1名ずつ順に**（並列化しない）行う:
-   - a. `read_sheet.py --person <名前>` で差分案件を取得し、stderr の `[cursor] high_water=<ISO>` を控える。差分0件なら評価をスキップし d のカーソル前進のみ行う。
-   - b. §5 の基準で評価しランキングする（許容条件プロンプトは対象指定モードのみ適用）。
-   - c. `data/matches/<名前>.jsonl` へ1行1案件で書き出す（既存あれば末尾追記。write_match 側で row_key dedup されるため再掲しても二重行にならない）。
-   - d. `write_match.py <名前> --advance-cursor <aのhigh_water>` で本人タブへ反映＋カーソル前進（Windows: `.venv\Scripts\python.exe scripts\write_match.py <名前> --advance-cursor <ISO>` / macOS・Linux: `.venv/bin/python scripts/write_match.py <名前> --advance-cursor <ISO>`）。追記→カーソル前進の順（overlap 10分差引）。マッチ0件でも `--advance-cursor` を渡す。
-3. §8 のルールで対象者ごとに画面報告（一括モードでは対象者全体の集計も冒頭に示す）。
+**一括モード（既定・稼働中フォルダ全員）**:
+1. `match_prepare.py` を実行し `{high_water, targets:[...]}` を得る（人員を名指ししない＝稼働中の登録者が自動対象。人が増減してもコマンド不変）。
+2. 各 target を**1名ずつ順に**（並列化しない）:
+   - a. `target.delta`（その人の差分案件）を `target.profile`（本人条件）と §5 の基準で評価する。差分0件なら評価スキップ（c のカーソル前進のみ）。
+   - b. `data/matches/<person_name>.jsonl` へ1行1案件で書き出す（row_key dedup 済み）。
+   - c. `write_match.py <person_name> --advance-cursor <high_water>` で本人タブへ反映＋カーソル前進（`high_water` は match_prepare の全員共通値・追記→前進の順・overlap 10分差引・マッチ0件でも渡す）。
+3. §8 のルールで対象者ごとに画面報告（冒頭に対象N名／スキップM名の全体集計）。
+
+**対象指定モード（1名を名指し・許容条件を個別適用）**:
+1. `read_profile.py <名前>`（本人条件）＋ `read_sheet.py --person <名前>`（差分案件・stderr の `[cursor] high_water` を控える）。許容条件プロンプトを適用。
+2. §5 の基準で評価 → `data/matches/<名前>.jsonl`。
+3. `write_match.py <名前> --advance-cursor <read_sheetのhigh_water>` で反映＋前進（追記→前進・overlap 10分差引・マッチ0件でも渡す）。
+4. §8 のルールで画面報告。
 
 **全件で再マッチ（スキル/プロフィール編集後）**: 差分は既定。全件は「カーソルを消す＝次回の通常ランがそのまま全件になる」で行う（別モードは持たない）。
-- スキル（評価ロジック）編集 → 全員再評価: `scripts/state.py match-cursor reset --all` → その後は通常どおり手順1〜2。
+- スキル（評価ロジック）編集 → 全員再評価: `scripts/state.py match-cursor reset --all` → その後は通常どおり一括モードを回す。
 - 1人のプロフィール編集 → その人だけ: `scripts/state.py match-cursor reset <名前>`。
 - カーソル確認: `scripts/state.py match-cursor list`。
-- その場で1回だけ全件（カーソルを動かさない）: 手順2a を `read_sheet.py --full`・手順2d で `--advance-cursor` を渡さない。
+- その場で1回だけ全件（カーソルを動かさない）: 一括は `match_prepare.py --full`／対象指定は `read_sheet.py --full`。いずれも write_match で `--advance-cursor` を渡さない。
 - `write_match.py` は追記のみ（messageId dedup）＝全件再マッチでも既存タブ行の適合度は上書きされず新規に該当した案件の追加のみ（upsert は backlog）。
 
 ## 7. 出力（データ契約）
@@ -130,5 +144,5 @@
 - 方向B（案件→人材・`マッチ結果` タブ）→ 将来。
 - `person_id` 主キー・行ロック（TOCTOU回避）→ backlog（v0 はタブ名＝要員名）。
 - **要員ごと差分カーソル（②・`ingested_at` 基準）は実装済み**（2026-07-08・DECISIONS §9）。鮮度TTL（①・`received_at` 基準で古い案件を除外）・粗フィルタ緩和（隣接県表）・スキル正準辞書 → backlog。
-- 一括モードの単一読取＋カーソル別パーティション化（今は要員ごとに read_sheet を呼ぶ）→ backlog。
+- 一括モードの単一読取＋カーソル別パーティション化（`match_prepare.py`）→ **実装済み**（2026-07-08）。台帳1回読みで稼働中全員ぶんの差分を束ねる。
 - 単一マッチ結果タブへの移行（人員タブ>30）→ backlog。
