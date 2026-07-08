@@ -19,7 +19,7 @@ fetch_gmail.py → data/inbox → 【/ses-triage 本スキル】 → data/triage
 ## 2. 起動
 
 - 起動例: 「新着メールを取り込んで仕分けして」「inbox を仕分けして」
-- オプション（プロンプトで指定可）: 取得上限（`--limit N`）・特定日のみ（`--date YYYY-MM-DD`）・バッチサイズ
+- オプション（プロンプトで指定可）: 取得ウィンドウ（`--days N`・**既定7＝直近1週間**）・取得上限（`--limit N`）・特定日のみ（`--date YYYY-MM-DD`）・バッチサイズ
 
 ## 3. 前提条件
 
@@ -41,10 +41,10 @@ fetch_gmail.py → data/inbox → 【/ses-triage 本スキル】 → data/triage
 
 1. **取得（必要時）**: 未処理メールを `data/inbox/` へ取得する。
    ```
-   .venv/bin/python scripts/fetch_gmail.py [--limit N] [--date YYYY-MM-DD]      # macOS/Linux
-   .venv\Scripts\python.exe scripts\fetch_gmail.py [--limit N] [--date YYYY-MM-DD]  # Windows
+   .venv/bin/python scripts/fetch_gmail.py [--days N] [--limit N] [--date YYYY-MM-DD]      # macOS/Linux
+   .venv\Scripts\python.exe scripts\fetch_gmail.py [--days N] [--limit N] [--date YYYY-MM-DD]  # Windows
    ```
-   inbox に**未仕分けの jsonl が既にある**場合は fetch を省略しそれを対象にしてよい。
+   **既定は実行日から直近1週間（`--days 7`）以内**の未処理だけが対象（案件は短命なため）。`--days N` で調整・`--date`/`--since` で上書き・`--days 0` で全履歴。inbox に**未仕分けの jsonl が既にある**場合は fetch を省略しそれを対象にしてよい。
    **cron化フェーズ1（`_state`/`_runlog`）以降、`fetch_gmail.py` はこのバッチの処理サイクル全体を守るセッション単位ロックを取得する**（`/ses-structure` の `append_sheet.py` 完了まで保持）。ロック中は他の人の `fetch_gmail.py` が拒否されるため、triage→structure→append まで通しで進める（放置しない）。
 2. **未仕分けファイルの特定**: `data/triage/` に同名ファイルが無い inbox ファイルが対象。
 3. **仕分け**: inbox ファイルを **50〜100通/バッチ**で読み、§6 の基準で各メールを 案件/人材/その他 に分類。

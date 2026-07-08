@@ -41,12 +41,13 @@ fetch_gmail.py → data/inbox → 【/ses-triage 本スキル】 → data/triage
 `data/inbox/` に**未仕分けの jsonl が既にある**場合は fetch を省略してそれを対象にしてよい。新規に取得する場合:
 
 ```
-.venv/bin/python scripts/fetch_gmail.py [--limit N] [--date YYYY-MM-DD]       # macOS/Linux
-.venv\Scripts\python.exe scripts\fetch_gmail.py [--limit N] [--date YYYY-MM-DD]  # Windows
+.venv/bin/python scripts/fetch_gmail.py [--days N] [--limit N] [--date YYYY-MM-DD]       # macOS/Linux
+.venv\Scripts\python.exe scripts\fetch_gmail.py [--days N] [--limit N] [--date YYYY-MM-DD]  # Windows
 ```
 
 - 未処理メール（`-label:SES-AI/processed`）を `data/inbox/<タイムスタンプ>.jsonl` へ取得する。
-- `--limit N`（取得上限・テスト用）・`--date YYYY-MM-DD`（特定日のみ・実測用）はプロンプトで指定可。
+- **既定は実行日から直近1週間（`--days 7`）以内**の未処理だけを対象にする（案件は短命なため、古い未処理を毎回舐めない）。ウィンドウを変えるなら `--days N`／特定日だけなら `--date YYYY-MM-DD`／開始日フロアは `--since YYYY-MM-DD`／全履歴は `--days 0`（`--date`・`--since` は `--days` より優先）。
+- `--limit N`（取得上限・テスト用）はプロンプトで指定可。
 - 「No unprocessed messages.」が出たら §エラー・例外 に従い終了。
 - **cron化フェーズ1（`_state`/`_runlog`）以降、`fetch_gmail.py` はこのバッチの処理サイクル全体を守るセッション単位ロックを取得する**（`/ses-structure` の `append_sheet.py` 完了まで保持）。ロック中は他の人の `fetch_gmail.py` が拒否されるため、triage→structure→append まで通しで進める（放置しない）。
 

@@ -1,9 +1,11 @@
 """v0-B: 未処理メール取得（-label:SES-AI/processed）→ data/inbox/*.jsonl
 
 カーソルは Gmail ラベルだけ（時刻カーソルを使わない＝取りこぼし無し）。
-fetch はフィルタしない・本文テキスト抽出＋軽量クリーニング（MIME デコード＋text/plain優先、
-無ければHTML→テキスト。フッター切除・URL短縮・改行/空行正規化。§CLAUDE.md v0実装契約）。
-可逆性は案件メールリンク（messageIdからGmail原文へ復元可能）で担保する。
+fetch は内容フィルタはしない（案件/人材の判定は Claude）。ただし**既定では実行日から
+直近 DEFAULT_WINDOW_DAYS 日（=1週間）以内**の未処理メールだけを対象にする（案件は短命なため）。
+`--days` で日数調整・`--date`/`--since` で上書き・`--days 0` で全履歴。本文テキスト抽出＋
+軽量クリーニング（MIME デコード＋text/plain優先、無ければHTML→テキスト。フッター切除・URL短縮・
+改行/空行正規化。§CLAUDE.md v0実装契約）。可逆性は案件メールリンク（messageIdからGmail原文へ復元可能）で担保する。
 """
 import base64
 import html
@@ -25,6 +27,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 INBOX_DIR = REPO_ROOT / "data" / "inbox"
 JST = timezone(timedelta(hours=9))
 QUERY = "-label:SES-AI/processed"
+# 既定の取得ウィンドウ（--date/--since 未指定時）。実行日からこの日数以内の未処理メールだけを対象にする。
+# 案件メールは短命（〜2週間で充足）なため、古い未処理を毎回舐めないよう既定を直近1週間に絞る。
+DEFAULT_WINDOW_DAYS = 7
 
 # 送信元ドメイン単位の本文スキップリスト（レビュー2026-07-06 指摘 #7）。
 # ニュースレター等・案件/人材の実体が無いと判明した配信元は、本文（追跡URLの塊等）を
@@ -201,7 +206,12 @@ def main() -> None:
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="取得件数の上限（テスト用。未指定なら全件）")
-    parser.add_argument("--date", type=str, default=None, help="特定日のみ取得（YYYY-MM-DD・単日ウィンドウ・実測用）")
+    parser.add_argument(
+        "--days", type=int, default=DEFAULT_WINDOW_DAYS,
+        help=f"実行日からこの日数以内の未処理メールを対象にする（既定 {DEFAULT_WINDOW_DAYS}＝直近1週間）。"
+             "--date/--since を指定した場合はそちらが優先。0 以下で全履歴（ウィンドウなし）。",
+    )
+    parser.add_argument("--date", type=str, default=None, help="特定日のみ取得（YYYY-MM-DD・単日ウィンドウ・実測用。--days より優先）")
     parser.add_argument(
         "--since", type=str, default=None,
         help="この日以降(YYYY-MM-DD)の未処理メールだけを対象にする（上限日なしのフロア）。"
@@ -228,6 +238,11 @@ def main() -> None:
     elif args.since:
         since_day = datetime.strptime(args.since, "%Y-%m-%d")
         extra_query = f"after:{since_day.strftime('%Y/%m/%d')}"
+    elif args.days and args.days > 0:
+        # 既定: 実行日から --days 日以内（実行日−days 以降）。案件は短命なため直近1週間に絞る。
+        floor = (datetime.now(JST) - timedelta(days=args.days)).strftime("%Y/%m/%d")
+        extra_query = f"after:{floor}"
+    # （--days<=0 かつ --date/--since 無し → ウィンドウなし＝全履歴。日次 budget 上限のみが効く）
     if args.exclude_from:
         excludes = " ".join(f"-from:{d.strip()}" for d in args.exclude_from.split(",") if d.strip())
         extra_query = f"{extra_query} {excludes}".strip()
