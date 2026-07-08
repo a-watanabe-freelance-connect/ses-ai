@@ -10,6 +10,7 @@ fetch後の長い人手triage/structure作業中に別の人が追いfetchする
 import getpass
 import os
 import socket
+import sys
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -201,6 +202,30 @@ def set_match_cursor(sheets, sheet_id: str, person: str, iso: str, owner: str = 
     _write_state(sheets, sheet_id, {f"{MATCH_CURSOR_PREFIX}{person}": iso}, owner)
 
 
+def list_match_cursors(sheets, sheet_id: str) -> dict:
+    """現在の match_cursor.* を {要員名: ISO} で返す（空文字＝次回全件）。"""
+    state = _read_state(sheets, sheet_id)
+    return {
+        k[len(MATCH_CURSOR_PREFIX):]: v
+        for k, v in state.items()
+        if k.startswith(MATCH_CURSOR_PREFIX)
+    }
+
+
+def reset_match_cursor(sheets, sheet_id: str, person: str = None, owner: str = None) -> list:
+    """マッチ差分カーソルを空へ戻す（＝次回ランがそのままの差分フローで全件になる）。
+    スキル編集後は全員（person=None）、プロフィール編集後はその要員のみを対象にする。
+    戻り値: リセットした要員名のリスト。"""
+    owner = owner or current_owner()
+    if person is not None:
+        _write_state(sheets, sheet_id, {f"{MATCH_CURSOR_PREFIX}{person}": ""}, owner)
+        return [person]
+    names = list(list_match_cursors(sheets, sheet_id).keys())
+    if names:
+        _write_state(sheets, sheet_id, {f"{MATCH_CURSOR_PREFIX}{n}": "" for n in names}, owner)
+    return names
+
+
 def _append_runlog(sheets, sheet_id: str, row: list) -> None:
     sheets.spreadsheets().values().append(
         spreadsheetId=sheet_id,
@@ -303,6 +328,12 @@ def main() -> None:
     kill_p = sub.add_parser("killswitch")
     kill_p.add_argument("action", choices=["on", "off", "status"])
 
+    mc_p = sub.add_parser("match-cursor", help="差分マッチのカーソル操作（list/reset）")
+    mc_p.add_argument("action", choices=["list", "reset"])
+    mc_p.add_argument("person", nargs="?", help="reset の対象要員名（省略時は --all が必要）")
+    mc_p.add_argument("--all", action="store_true", dest="all_persons",
+                      help="reset で全要員のカーソルを対象にする（スキル編集後の全件再マッチ用）")
+
     args = parser.parse_args()
 
     load_dotenv(REPO_ROOT / ".env")
@@ -325,6 +356,24 @@ def main() -> None:
         else:
             set_kill_switch(sheets, sheet_id, on=(args.action == "on"))
             print(f"kill_switch set to {args.action}")
+    elif args.command == "match-cursor":
+        if args.action == "list":
+            cursors = list_match_cursors(sheets, sheet_id)
+            if cursors:
+                for name, iso in cursors.items():
+                    print(f"{name}\t{iso or '(空=次回全件)'}")
+            else:
+                print("match_cursor は未設定です（全員が次回全件）。")
+        else:  # reset
+            if args.all_persons:
+                done = reset_match_cursor(sheets, sheet_id, person=None)
+                print(f"全要員のカーソルをリセットしました（次回全件）: {done or '(対象なし)'}")
+            elif args.person:
+                done = reset_match_cursor(sheets, sheet_id, person=args.person)
+                print(f"カーソルをリセットしました（次回全件）: {done}")
+            else:
+                print("reset には要員名か --all を指定してください。", file=sys.stderr)
+                sys.exit(1)
 
 
 if __name__ == "__main__":
