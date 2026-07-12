@@ -13,6 +13,9 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.readonly",
+    # H-1（共有book切り出し）: アプリが作成した共有bookの作成/書込に必要（権限付与は手動＝full driveは不要）。
+    # 追加後は token.json を作り直す再同意が必須（refresh では反映されない）。GCP同意画面のデータアクセスにも追加のこと。
+    "https://www.googleapis.com/auth/drive.file",
 ]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
