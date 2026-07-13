@@ -77,11 +77,12 @@ row_key（案件台帳のrow_key＝messageId）, 適合度（◎/○/△）, 案
 **一括モードは、全サブエージェントの評価完了（join）を待ってから**、対象者を**1名ずつ順に**（並列化しない）この書込みを行う。**ここが唯一の Sheets／`_state` 書込み地点**（本人タブ append・`人員一覧` upsert・カーソル前進をまとめて直列に行うので、共有タブ・`_state` への同時書込みが無く lost update しない → [[project_state_write_not_concurrent_safe]]）。
 
 ```
-.venv/bin/python scripts/write_match.py <名前> --advance-cursor <high_water>       # macOS/Linux
-.venv\Scripts\python.exe scripts\write_match.py <名前> --advance-cursor <high_water>  # Windows
+.venv/bin/python scripts/write_match.py <名前> --advance-cursor <high_water> --export-share-book       # macOS/Linux
+.venv\Scripts\python.exe scripts\write_match.py <名前> --advance-cursor <high_water> --export-share-book  # Windows
 ```
 
 - **`high_water`**: 一括モード＝`match_prepare` の `high_water`（全員共通）／対象指定モード＝手順1で控えた read_sheet の値。
+- **`--export-share-book`（H-1・共有book射影）**: 本人タブ追記・カーソル前進の**後**に、本人タブから**共有可の9列だけ**（`記載日 / 適合度 / 案件名 / 単価 / 勤務地 / リモート / 商流 / 必須スキル / 適合理由`）を当該要員の共有book（Drive `稼働中/<名前>/<名前>_案件マッチ`・無ければ作成）へ**冪等 rebuild** で射影する。除外（内部用）＝`懸念`・`ステータス`・`案件row_key(messageId)`・`リンク`。列は名前で選ぶ（誤射影防止の fail-safe）。**要員へは台帳bookでなくこの共有bookだけを共有**し、他要員情報・送信元PII・内部列の露出を断つ。共有book反映が失敗しても**本人タブ・カーソルは壊さず**（warning ログのみ・次回再射影）、1名の失敗で一括全体を止めない。一括・対象指定の**両モードで各要員ぶん自動で走る**（write_match を人ごとに回すため呼び忘れが無い）。**要員への閲覧権限付与は当面手動**（担当者が Drive 共有UIで行う。本スキルは共有bookの生成/更新まで）。
 - 本人タブ（タブ名＝要員名）の列: `記載日 / 適合度 / 案件名 / 単価 / 勤務地 / リモート / 商流 / 必須スキル / 適合理由 / 懸念 / ステータス / 案件row_key(messageId) / リンク`。`記載日`＝実行日・`ステータス`未指定は「未対応」を自動設定。タブが無ければ見出し付きで自動作成。
 - **既存の`案件row_key(messageId)`列で重複回避**（再実行は新規のみ・既存行の手動ステータスは保持）。
 - **名簿 `人員一覧` も自動更新**: 本人タブ書込のたびに `名前 / タブリンク / 件数` を upsert。新規要員は行追加（マッチ0件でも 件数0 で登載）、既存要員は件数のみ更新。→ 稼働中フォルダへ要員を追加して一括モードを回せば、本人タブと名簿の両方が自動で用意される。
@@ -153,4 +154,5 @@ row_key（案件台帳のrow_key＝messageId）, 適合度（◎/○/△）, 案
 - **要員ごと差分カーソル（②・`ingested_at` 基準）は実装済み**（DECISIONS §9）。鮮度TTL（①・`received_at` 基準で古い案件を除外）・粗フィルタ緩和（隣接県表）・スキル正準辞書 → backlog。
 - 一括モードの単一読取＋カーソル別パーティション化（`match_prepare.py`）→ **実装済み**（2026-07-08）。台帳1回読みで稼働中全員ぶんの差分を束ねる。
 - 一括モードの**評価並列化（要員ごとサブエージェント）＋書込み直列**（`match_prepare.py --emit-inputs` で1要員=1入力ファイル→並列評価→本体が `write_match.py` を1名ずつ）→ **実装済み**（2026-07-10）。評価は並列・共有リソース（Sheets/`_state`）書込みは直列で lost update を回避（[[project_state_write_not_concurrent_safe]]）。書込みまで並列化する場合の per-cell `_state` 更新・楽観ロックは backlog。
+- **要員マッチ結果の共有book切り出し（H-1・`write_match --export-share-book` → `export_share_book.py`）→ 実装済み**（2026-07-13）。本人タブから共有可の9列だけを要員ごとの別book（`稼働中/<名前>/<名前>_案件マッチ`）へ冪等射影（手順3）。共有権限の付与は当面手動・自動付与は将来（`資料/共有book切り出しロードマップ.md`）。export は本人1名に閉じたリソースのみ触るため並列安全だが、現状は直列書込フェーズ内で走る。
 - 単一マッチ結果タブへの移行（人員タブ>30）→ backlog。

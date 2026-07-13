@@ -7,6 +7,7 @@
 import argparse
 import json
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -119,6 +120,11 @@ def main() -> None:
         help="追記成功後に _state の match_cursor.<名前> をこの高水位ISOへ前進"
              "（read_sheet.py / match_prepare.py の high_water をそのまま保存）",
     )
+    parser.add_argument(
+        "--export-share-book", dest="export_share_book", action="store_true",
+        help="追記・カーソル前進の成功後に、本人タブから共有book（稼働中/<名前>/<名前>_案件マッチ）へ"
+             "共有可の列だけを射影する（H-1）。失敗しても本人タブ/カーソルは壊さない。",
+    )
     args = parser.parse_args()
     person_name = args.person_name
 
@@ -147,6 +153,24 @@ def main() -> None:
     if args.advance_cursor:
         st.set_match_cursor(sheets, sheet_id, person_name, args.advance_cursor)
         print(f"match_cursor.{person_name} を {args.advance_cursor} へ前進。")
+
+    # H-1: 本人タブ→共有book へ射影（追記→カーソル前進の後・失敗は隔離）。
+    # 共有book書込が落ちても本人タブ/カーソルは確定済みで、次回実行で rebuild し取り戻せる
+    # （export_share_book は本人タブを毎回全読み rebuild する冪等な射影）。
+    # export_share_book は本人1名に閉じたリソースのみ触り（本人タブ読取＋本人の別book書込）、
+    # _state・人員一覧には触れないため、直列書込フェーズ内で安全に走る。
+    if args.export_share_book:
+        try:
+            # 遅延import（循環参照回避: export_share_book は write_match を import する）。
+            import export_share_book as esb
+            root_folder_id = os.environ["PROFILE_FOLDER_ID"]
+            drive = build("drive", "v3", credentials=creds)
+            esb.export_one(drive, sheets, sheet_id, root_folder_id, person_name)
+        except Exception as e:
+            print(
+                f"[warn] {person_name}: 共有book反映に失敗（本人タブ/カーソルは確定済み・次回再反映）: {e}",
+                file=sys.stderr,
+            )
 
 
 if __name__ == "__main__":
